@@ -1,7 +1,9 @@
+require('dotenv').config()
 const express = require('express')
 var morgan = require('morgan')
 const cors = require('cors')
 const app = express()
+const Person = require('./models/person')
 
 app.use(cors())
 app.use(express.json())
@@ -12,65 +14,36 @@ morgan.token('haru', function(request,response){
 })
 morgan.format('joke',':haru')
 app.use(morgan('joke'))
-let phonebook = [
-    {
-      "id": 1,
-      "name": "Arto Hellas",
-      "number": "040-123456"
-    },
-    {
-      "id": 2,
-      "name": "Ada Lovelace",
-      "number": "39-44-5323523"
-    },
-    {
-      "id": 3,
-      "name": "Dan Abramov",
-      "number": "12-43-234345"
-    },
-    {
-      "id": 4,
-      "name": "Mary Poppendieck",
-      "number": "39-23-6423122"
-    }
-]
 
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT
 app.listen(PORT,()=>{
     console.log(`server running on port ${PORT}`)
 })
 
 app.get('/api/persons',(request,response) => {
-    response.json(phonebook)
+    Person.find({}).then(people => {
+        response.json(people)
+    })
 })
 
 app.get('/info',(request,response) => {
     response.send(`Phonebook has info for ${phonebook.length} people ${new Date()}`)
 })
 
-app.get('/api/persons/:id',(request,response) => {
-    const id = Number(request.params.id)
-    const person = phonebook.find(p => p.id === id)
-    if(person){
-        response.json(person)
-    }else{
-        response.status(404).end()
-    }
+app.get('/api/persons/:id',(request,response,next) => {
+    Person.findById(request.params.id).then(result => {
+        response.json(result)
+    })
+    .catch(error => next(error))
 })
 
-app.delete('/api/persons/:id',(request,response) => {
-    const id = Number(request.params.id)
-    const person = phonebook.find(p => p.id === id)
-    if(person){
-        phonebook = phonebook.filter(p => p.id !== id)
-        response.status(204).end()
-    }else{
-        response.status(404).end()
-    }
+app.delete('/api/persons/:id',(request,response,next) => {
+    Person.findByIdAndDelete(request.params.id).then(result => {
+        response.status(204).json(result)
+    })
+    .catch(error => next(error))
 })
-const requstId = () => {
-    return Math.floor(Math.random()*10000000000)
-}
+
 app.post('/api/persons',(request,response) => {
     const data = request.body
     if(data.name == null || data.number == null){
@@ -79,18 +52,30 @@ app.post('/api/persons',(request,response) => {
         })
         return
     }
-    if(phonebook.find(p => p.name === data.name)){
-        response.status(400).json({
-            error: 'name must be unique'
-        })
-        return
-    }
-    const person = {
-        id: requstId(),
+    const person = new Person({
         name: data.name,
         number: data.number,
-    }
-    phonebook = phonebook.concat(person)
-    console.log(phonebook)
-    response.status(200).json(person)
+    })
+    person.save().then(result => {
+        response.json(result)
+    })
 })
+
+const unknownEndpoint = (request, response) => {
+    response.status(404).send({ error: 'unknown endpoint' })
+}
+
+app.use(unknownEndpoint)
+
+const errorHandler = (error, request, response, next) => {
+    console.error(error.message)
+  
+    if (error.name === 'CastError') {
+      return response.status(400).send({ error: 'malformatted id' })
+    }
+  
+    next(error)
+}
+  
+// 这必须是最后一个载入的中间件。
+app.use(errorHandler)
