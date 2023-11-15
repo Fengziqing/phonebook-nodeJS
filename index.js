@@ -27,7 +27,9 @@ app.get('/api/persons',(request,response) => {
 })
 
 app.get('/info',(request,response) => {
-    response.send(`Phonebook has info for ${phonebook.length} people ${new Date()}`)
+    Person.estimatedDocumentCount().then(result =>{
+        response.send(`Phonebook has info for ${result} people ${new Date()}`)
+    })
 })
 
 app.get('/api/persons/:id',(request,response,next) => {
